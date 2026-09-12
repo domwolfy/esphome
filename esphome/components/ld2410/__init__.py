@@ -3,7 +3,7 @@ from esphome.automation import maybe_simple_id
 import esphome.codegen as cg
 from esphome.components import uart
 import esphome.config_validation as cv
-from esphome.const import CONF_ID, CONF_PASSWORD, CONF_THROTTLE, CONF_TIMEOUT
+from esphome.const import CONF_ID, CONF_PASSWORD, CONF_THROTTLE, CONF_TIMEOUT, CONF_MODEL
 from esphome.core import ID
 from esphome.cpp_generator import MockObj, TemplateArgsType
 from esphome.types import ConfigType
@@ -19,12 +19,21 @@ LD2410Component = ld2410_ns.class_("LD2410Component", cg.Component, uart.UARTDev
 CONF_LD2410_ID = "ld2410_id"
 CONF_MAX_MOVE_DISTANCE = "max_move_distance"
 CONF_MAX_STILL_DISTANCE = "max_still_distance"
-CONF_MOVE_THRESHOLDS = [f"g{x}_move_threshold" for x in range(9)]
-CONF_STILL_THRESHOLDS = [f"g{x}_still_threshold" for x in range(9)]
+CONF_MOVE_THRESHOLDS = [f"g{x}_move_threshold" for x in range(32)]
+CONF_STILL_THRESHOLDS = [f"g{x}_still_threshold" for x in range(32)]
+
+
+LD2410Model = ld2410_ns.enum("LD2410Model")
+MODELS = {
+    "GENERIC": LD2410Model.MODEL_GENERIC,
+    "LD2410D": LD2410Model.MODEL_LD2410D,
+}
+
 
 CONFIG_SCHEMA = cv.Schema(
     {
         cv.GenerateID(): cv.declare_id(LD2410Component),
+        cv.Optional(CONF_MODEL, default="GENERIC"): cv.enum(MODELS, upper=True),
         cv.Optional(CONF_THROTTLE): cv.invalid(
             f"{CONF_THROTTLE} has been removed; use per-sensor filters, instead"
         ),
@@ -43,7 +52,7 @@ CONFIG_SCHEMA = cv.Schema(
     }
 )
 
-for i in range(9):
+for i in range(32):
     CONFIG_SCHEMA = CONFIG_SCHEMA.extend(
         cv.Schema(
             {
@@ -76,7 +85,8 @@ async def to_code(config: ConfigType) -> None:
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
     await uart.register_uart_device(var, config)
-
+    if CONF_MODEL in config:
+        cg.add(var.set_model(config[CONF_MODEL]))
 
 CALIBRATION_ACTION_SCHEMA = maybe_simple_id(
     {

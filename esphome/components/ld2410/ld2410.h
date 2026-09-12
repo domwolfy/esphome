@@ -35,10 +35,33 @@ using namespace ld24xx;
 
 // Engineering data frame is 45 bytes; +1 for null terminator, +4 so that a frame footer always
 // lands inside the buffer during footer-based resynchronization after losing sync.
-static constexpr uint8_t MAX_LINE_LENGTH = 50;
-static constexpr uint8_t TOTAL_GATES = 9;  // Total number of gates supported by the LD2410
+static constexpr uint8_t MAX_LINE_LENGTH = 160;
+static constexpr uint8_t MAX_GATES = 32;  // Total number of gates supported by the LD2410
+
+static const uint8_t LD2410D_ENABLE_BINARY_CMD[] = {
+    0xFD, 0xFC, 0xFB, 0xFA, // Header[cite: 1, 2]
+    0x04, 0x00,             // Length
+    0x12, 0x00,             // Command: Enable Binary Output (0x0012)
+    0x00, 0x00,             // Payload
+    0x04, 0x03, 0x02, 0x01  // Tail[cite: 1, 2]
+};
+
+
+enum LD2410Model {
+  MODEL_GENERIC = 0,
+  MODEL_LD2410D = 1,
+};
+
 
 class LD2410Component final : public Component, public uart::UARTDevice {
+  uint8_t get_total_gates() const {
+  return this->model_ == MODEL_LD2410D ? 32 : 8; // (or 9 depending on standard variant)
+  }
+  public:
+    void set_model(LD2410Model model) { this->model_ = model; }
+  protected:
+    LD2410Model model_{MODEL_GENERIC};
+    void parse_ld2410d_frame_(const uint8_t *buffer, uint16_t len);
 #ifdef USE_BINARY_SENSOR
   SUB_BINARY_SENSOR(out_pin_presence_status)
   SUB_BINARY_SENSOR(moving_target)
@@ -107,6 +130,7 @@ class LD2410Component final : public Component, public uart::UARTDevice {
   void send_command_(uint8_t command_str, const uint8_t *command_value, uint8_t command_value_len);
   void set_config_mode_(bool enable);
   void handle_periodic_data_();
+  void handle_periodic_data_ld2410d_();
   bool handle_ack_data_();
   void readline_(int readch);
   void query_parameters_();
@@ -125,12 +149,12 @@ class LD2410Component final : public Component, public uart::UARTDevice {
   uint8_t version_[6] = {0, 0, 0, 0, 0, 0};
   bool bluetooth_on_{false};
 #ifdef USE_NUMBER
-  std::array<number::Number *, TOTAL_GATES> gate_move_threshold_numbers_{};
-  std::array<number::Number *, TOTAL_GATES> gate_still_threshold_numbers_{};
+  std::array<number::Number *, MAX_GATES> gate_move_threshold_numbers_{};
+  std::array<number::Number *, MAX_GATES> gate_still_threshold_numbers_{};
 #endif
 #ifdef USE_SENSOR
-  std::array<SensorWithDedup<uint8_t>, TOTAL_GATES> gate_move_sensors_{};
-  std::array<SensorWithDedup<uint8_t>, TOTAL_GATES> gate_still_sensors_{};
+  std::array<SensorWithDedup<uint8_t>, MAX_GATES> gate_move_sensors_{};
+  std::array<SensorWithDedup<uint8_t>, MAX_GATES> gate_still_sensors_{};
 #endif
 };
 
